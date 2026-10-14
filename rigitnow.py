@@ -184,7 +184,8 @@ def create_controls():
         parent = data['joints'][n]['parent']
         cmds.parent(offsets[n],controls.get(parent,global_ctrl))
         cmds.parentConstraint(c,joint(n),mo=True,name=c+'_parentConstraint')
-        cmds.scaleConstraint(c,joint(n),mo=True,name=c+'_scaleConstraint')
+        # Global scale is inherited once from rn_joints_grp. Per-joint scale
+        # constraints conflict with joint segment scale compensation.
         cmds.setAttr(joint(n)+'.displayLocalAxis',False)
         for attr in ('sx','sy','sz','v'):
             cmds.setAttr(c+'.'+attr,lock=True,keyable=False)
@@ -197,6 +198,22 @@ def create_controls():
     fit_control_shapes()
     cmds.select(global_ctrl)
     return list(controls.values())+[global_ctrl]
+
+@transaction
+def repair_global_scaling():
+    """Remove redundant joint scale drivers from an existing rigitnow rig."""
+    removed=[]
+    for n in template()['joints']:
+        j=joint(n)
+        if not cmds.objExists(j): continue
+        drivers=set()
+        for axis in 'XYZ':
+            drivers.update(cmds.listConnections(j+'.scale'+axis,source=True,destination=False,type='scaleConstraint') or [])
+        if drivers:
+            cmds.delete(list(drivers))
+            removed.extend(drivers)
+            cmds.setAttr(j+'.scale',1,1,1)
+    return removed
 
 @transaction
 def fit_control_shapes():
